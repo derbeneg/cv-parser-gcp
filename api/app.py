@@ -1,5 +1,8 @@
 # api/app.py
+
+import os
 from fastapi import FastAPI, UploadFile, File
+from parser import parse   # our adapter dispatcher
 
 app = FastAPI()
 
@@ -8,11 +11,7 @@ def health():
     return {"status": "ok"}
 
 @app.post("/parse")
-async def parse(cv: UploadFile = File(...)):
-    # Stub parser: return empty lists
-    return {
-        "skills": [],
-        "leadership_experience": [],
-        "past_companies": [],
-        "roles_of_interest": []
-    }
+async def parse_endpoint(cv: UploadFile = File(...)):
+    cv_bytes = await cv.read()
+    result = parse(cv_bytes)
+    return result

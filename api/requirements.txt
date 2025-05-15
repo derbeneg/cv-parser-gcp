@@ -1,3 +1,6 @@
 fastapi
 uvicorn[standard]
 python-multipart
+pdfminer.six 
+google-cloud-aiplatform  # for Gemini
+openai
