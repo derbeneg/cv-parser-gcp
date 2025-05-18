@@ -1,38 +1,50 @@
 # api/parser.py
 
 import os
-import csv
 import io
+import csv
 import json
-from typing import List, Dict
+import re
 from pdfminer.high_level import extract_text
 from prompt_template import PROMPT_TEMPLATE
 
-# ─── Load allowed values from CSVs ─────────────────────────────────────────────
+# new Gen AI SDK imports
+from google import genai
 
-def load_csv(path: str) -> List[str]:
-    with open(path, newline='', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        next(reader, None)  # skip header
-        return [row[0].strip() for row in reader if row and row[0].strip()]
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config'))
-ALLOWED_ROLES      = load_csv(os.path.join(BASE, 'roles.csv'))
-ALLOWED_INDUSTRIES = load_csv(os.path.join(BASE, 'industries.csv'))
-ALLOWED_LEADERSHIP = load_csv(os.path.join(BASE, 'leadership_experience.csv'))
-ALLOWED_EXPERIENCE = load_csv(os.path.join(BASE, 'work_experience.csv'))
-ALLOWED_SKILLS     = load_csv(os.path.join(BASE, 'tech_skills.csv'))
+def load_csv(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return [row[0] for row in csv.reader(f) if row]
 
-# ─── Gemini (Vertex AI) adapter ───────────────────────────────────────────────
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+CONFIG_DIR = os.path.join(BASE_DIR, 'config')
 
-def parse_with_gemini(cv_bytes: bytes) -> Dict[str, List[str]]:
-    from google.cloud import aiplatform
-    project  = os.getenv("GCP_PROJECT")
-    location = os.getenv("GCP_LOCATION", "us-central1")
-    model    = os.getenv("GEMINI_MODEL", "chat-bison-001")
-    client   = aiplatform.TextGenerationServiceClient()
-    name     = client.model_path(project, location, model)
+ALLOWED_SKILLS      = load_csv(os.path.join(CONFIG_DIR, 'tech_skills.csv'))
+ALLOWED_ROLES       = load_csv(os.path.join(CONFIG_DIR, 'roles.csv'))
+ALLOWED_INDUSTRIES  = load_csv(os.path.join(CONFIG_DIR, 'industries.csv'))
+ALLOWED_LEADERSHIP  = load_csv(os.path.join(CONFIG_DIR, 'leadership_experience.csv'))
+ALLOWED_EXPERIENCE  = load_csv(os.path.join(CONFIG_DIR, 'work_experience.csv'))
 
+# initialize a single GenAI client for Gemini on Vertex AI
+genai_client = genai.Client(
+    vertexai=True,
+    project=os.getenv("GCP_PROJECT"),
+    location=os.getenv("GCP_LOCATION", "us-central1")
+)
+
+def clean_llm_json(raw: str) -> str:
+    s = raw.strip()
+    # remove triple-backtick fences
+    if s.startswith("```"):
+        # strip any number of backticks at start/end
+        s = re.sub(r"^```+(\w+)?", "", s)
+        s = re.sub(r"```+$",     "", s)
+    # if they prefixed with "json\n", drop that too
+    s = re.sub(r"^json\s*\n", "", s, flags=re.IGNORECASE)
+    return s.strip()
+
+def parse_with_gemini(cv_bytes: bytes) -> dict:
     text = extract_text(io.BytesIO(cv_bytes))
     prompt = PROMPT_TEMPLATE.format(
         skills=ALLOWED_SKILLS,
@@ -42,62 +54,40 @@ def parse_with_gemini(cv_bytes: bytes) -> Dict[str, List[str]]:
         experience=ALLOWED_EXPERIENCE,
         text=text
     )
-    response = client.generate_text(name=name, prompt=prompt, temperature=0.0)
+    response = genai_client.models.generate_content(
+        model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash-001"),
+        contents=prompt
+    )
+    raw = response.text or ""
+    cleaned = clean_llm_json(raw)
     try:
-        return json.loads(response.text)
+        return json.loads(cleaned)
     except json.JSONDecodeError:
-        raise ValueError(f"Invalid JSON from Gemini: {response.text}")
+        raise ValueError(f"Couldn't parse JSON.\nRaw:\n{raw}\n\nCleaned:\n{cleaned}")
 
-# ─── ChatGPT (OpenAI) adapter ─────────────────────────────────────────────────
-
-def parse_with_chatgpt(cv_bytes: bytes) -> Dict[str, List[str]]:
+def parse_with_chatgpt(cv_bytes: bytes) -> dict:
     import openai
     openai.api_key = os.getenv("OPENAI_API_KEY")
-
     text = extract_text(io.BytesIO(cv_bytes))
-    messages = [
-        {"role": "system", "content": "You extract CV info into a strict JSON schema."},
-        {"role": "user",   "content": text}
-    ]
-    function_def = {
-        "name": "extract_cv",
-        "description": "Extract CV into JSON schema",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "skills":               {"type": "array", "items": {"type": "string"}},
-                "leadership_experience":{"type": "array", "items": {"type": "string"}},
-                "past_companies":       {"type": "array", "items": {"type": "string"}},
-                "roles_of_interest":    {"type": "array", "items": {"type": "string"}},
-                "years_of_experience":  {"type": "array", "items": {"type": "string"}},
-                "industries":           {"type": "array", "items": {"type": "string"}}
-            },
-            "required": [
-                "skills", "leadership_experience", "past_companies",
-                "roles_of_interest", "years_of_experience", "industries"
-            ]
-        }
-    }
-    resp = openai.ChatCompletion.create(
-        model=os.getenv("CHATGPT_MODEL", "gpt-4o"),
-        messages=messages,
-        temperature=0.0,
-        functions=[function_def],
-        function_call={"name": "extract_cv"}
+    prompt = PROMPT_TEMPLATE.format(
+        skills=ALLOWED_SKILLS,
+        roles=ALLOWED_ROLES,
+        industries=ALLOWED_INDUSTRIES,
+        leadership=ALLOWED_LEADERSHIP,
+        experience=ALLOWED_EXPERIENCE,
+        text=text
     )
-    message = resp.choices[0].message
-    if message.get("function_call"):
-        args_str = message.function_call.arguments
-        try:
-            return json.loads(args_str)
-        except json.JSONDecodeError:
-            raise ValueError(f"Invalid JSON from ChatGPT: {args_str}")
-    else:
-        raise ValueError("No function call returned by ChatGPT")
+    resp = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "system", "content": prompt}],
+        temperature=0
+    )
+    try:
+        return json.loads(resp.choices[0].message.content)
+    except json.JSONDecodeError:
+        raise ValueError(f"Invalid JSON from ChatGPT: {resp.choices[0].message.content}")
 
-# ─── Dispatcher ───────────────────────────────────────────────────────────────
-
-def parse(cv_bytes: bytes) -> Dict[str, List[str]]:
+def parse(cv_bytes: bytes) -> dict:
     mode = os.getenv("PARSER_MODE", "gemini").lower()
     if mode == "chatgpt":
         return parse_with_chatgpt(cv_bytes)

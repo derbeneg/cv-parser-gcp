@@ -1,8 +1,8 @@
 # api/app.py
 
-import os
-from fastapi import FastAPI, UploadFile, File
-from parser import parse   # our adapter dispatcher
+from fastapi import FastAPI, UploadFile, File, HTTPException
+import traceback
+from parser import parse
 
 app = FastAPI()
 
@@ -12,6 +12,9 @@ def health():
 
 @app.post("/parse")
 async def parse_endpoint(cv: UploadFile = File(...)):
-    cv_bytes = await cv.read()
-    result = parse(cv_bytes)
-    return result
+    try:
+        cv_bytes = await cv.read()
+        return parse(cv_bytes)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

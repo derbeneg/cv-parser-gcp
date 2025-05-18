@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+# Ignore GCP service-account key
+secrets/vertex-sa.json
+
+# Ignore local environment file
+.env
+
 # Distribution / packaging
 .Python
 build/
