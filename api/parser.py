@@ -6,7 +6,7 @@ import csv
 import json
 import re
 from pdfminer.high_level import extract_text
-from prompt_template import PROMPT_TEMPLATE
+from api.prompt_template import PROMPT_TEMPLATE
 
 # new Gen AI SDK imports
 from google import genai

@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 import traceback
-from parser import parse
+from api.parser import parse
 
 app = FastAPI()
 

@@ -1,29 +1,21 @@
-# docker-compose.yml
-
 version: "3.8"
 services:
   api:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
     image: cv-parser-api:dev
     ports:
       - "8080:8080"
     env_file:
       - .env
     environment:
-      # choose parsing mode: gemini or chatgpt
-      PARSER_MODE: ${PARSER_MODE:-gemini}
-
-      # OpenAI (if you want backup GPT)
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-
-      # Vertex AI (Gemini) via Gen AI SDK
+      PARSER_MODE:            ${PARSER_MODE:-gemini}
+      OPENAI_API_KEY:         ${OPENAI_API_KEY}
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/vertex-sa.json
-      GCP_PROJECT:               ${GCP_PROJECT}
-      GCP_LOCATION:              ${GCP_LOCATION:-us-central1}
-      GEMINI_MODEL:              ${GEMINI_MODEL:-gemini-2.0-flash-001}
-      # tell genai to use Vertex AI
+      GCP_PROJECT:            ${GCP_PROJECT}
+      GCP_LOCATION:           ${GCP_LOCATION:-us-central1}
+      GEMINI_MODEL:           ${GEMINI_MODEL:-gemini-2.0-flash-001}
       GOOGLE_GENAI_USE_VERTEXAI: "True"
-
     volumes:
       - ./secrets/vertex-sa.json:/secrets/vertex-sa.json:ro

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cv-parser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cv-parser
+  template:
+    metadata:
+      labels:
+        app: cv-parser
+    spec:
+      containers:
+        - name: api
+          image: gcr.io/cv-parser-460110/cv-parser-api:latest
+          env:
+            - name: PARSER_MODE
+              value: "gemini"
+          ports:
+            - containerPort: 8080
