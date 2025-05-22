@@ -8,3 +8,9 @@ variable "region" {
   type        = string
   default     = "us-central1"
 }
+
+variable "zone" {
+  description = "GCP zone for the Compute VM"
+  type        = string
+  default     = "us-central1-a"
+}

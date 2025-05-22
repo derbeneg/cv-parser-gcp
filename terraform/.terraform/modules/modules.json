@@ -1,1 +1,1 @@
-{"Modules":[{"Key":"","Source":"","Dir":"."},{"Key":"cloud_sql","Source":"./cloud_sql","Dir":"cloud_sql"},{"Key":"gke","Source":"./gke","Dir":"gke"},{"Key":"pubsub","Source":"./pubsub","Dir":"pubsub"}]}
+{"Modules":[{"Key":"","Source":"","Dir":"."},{"Key":"cloud_sql","Source":"./cloud_sql","Dir":"cloud_sql"},{"Key":"function","Source":"./function","Dir":"function"},{"Key":"gke","Source":"./gke","Dir":"gke"},{"Key":"pubsub","Source":"./pubsub","Dir":"pubsub"},{"Key":"vm","Source":"./vm","Dir":"vm"}]}

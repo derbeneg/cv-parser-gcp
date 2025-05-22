@@ -1,3 +1,4 @@
+# terraform/pubsub/main.tf
 resource "google_pubsub_topic" "parse_topic" {
   name = "cv-parse-topic"
 }

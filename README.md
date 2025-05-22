@@ -79,42 +79,68 @@ make down
 
 **2. Cloud deployment & smoke-test**
 
-# 1) Point Terraform at your service-account
+# 1) Point Terraform at your service‐account
 cd <project-root>
 export GOOGLE_APPLICATION_CREDENTIALS="$PWD/secrets/vertex-sa.json"
 
-# 2) Provision (or re-provision) your infra
+# 2) Provision (or re‐provision) your infra (GKE, SQL, Pub/Sub, VM, Function)
 cd terraform
 terraform init
 terraform apply -auto-approve
 
-# 3) Configure kubectl for your new cluster
+# 3) Configure kubectl for your new GKE cluster
 gcloud container clusters get-credentials cv-parser-gke-cluster \
   --region us-central1 \
   --project=cv-parser-460110
 kubectl get nodes    # confirm Ready
 
-# 4) Build & push your Docker image to GCR/AR
+# 4) Build & push your API Docker image
+cd .. to root!
 gcloud auth configure-docker
+docker build -t cv-parser-api:dev ./api
 docker tag cv-parser-api:dev gcr.io/cv-parser-460110/cv-parser-api:latest
 docker push gcr.io/cv-parser-460110/cv-parser-api:latest
 
-# 5) Deploy your k8s manifests
-cd k8s
+# 5) Build & push your VM worker Docker image
+docker build -t cv-parser-worker:dev ./api/worker
+docker tag cv-parser-worker:dev gcr.io/cv-parser-460110/cv-parser-worker:latest
+docker push gcr.io/cv-parser-460110/cv-parser-worker:latest
+
+# 6) Deploy your k8s manifests
+cd /k8s
 kubectl apply -f deployment.yaml
 kubectl apply -f service.yaml
 kubectl apply -f horizontalpodautoscaler.yaml
 
-# 6) Wait for a public IP
+# 7) Wait for a public IP
 kubectl get svc cv-parser-svc --watch
 
-# 7) Smoke-test your cloud endpoint
+# 8) Smoke‐test your cloud endpoint
+cd ..
 curl -F "cv=@api/samples/cv_bene.pdf" http://<EXTERNAL_IP>/parse
 
-# 8) (Optional) verify other resources
+# 9) Verify Cloud Function subscription
+gcloud pubsub topics publish cv-parse-topic --message='{"test":"msg"}'
+gcloud functions logs read cv-parse-logger --limit=10
+
+# 10) Verify your VM worker
+gcloud compute ssh cv-parser-worker --zone us-central1-a
+**# WAIT a bit! takes some time**
+docker ps
+docker logs <worker_container_id>    # should show “VM got message: {…}”
+
+# 11) (Optional) verify other resources
 gcloud sql instances describe cv-parser-db
 gcloud pubsub topics list
 gcloud pubsub subscriptions list
+
+# 12) Running my locust tests (from root)
+bash -x docs/locust/gcp/run_gcp_tests.sh
+
+# When you’re done & to avoid cost:
+cd terraform
+terraform destroy -auto-approve
+
 
 
 **Destroy everything**

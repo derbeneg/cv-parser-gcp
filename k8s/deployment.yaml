@@ -20,3 +20,8 @@ spec:
               value: "gemini"
           ports:
             - containerPort: 8080
+          resources:
+            requests:
+              cpu: 100m      # HPA can now observe this as the “100%” baseline
+            limits:
+              cpu: 500m      # you can burst up to 0.5 CPU if available
